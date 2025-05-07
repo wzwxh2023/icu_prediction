@@ -78,6 +78,9 @@ def process_features(data):
                 column_name = f"{emb_name}_emb_{i}"
                 if column_name in feature_list:
                     numeric_df[column_name] = val
+                elif i < 768:  # 假设嵌入向量维度为768，适用于BAAI/bge-large模型
+                    # 如果特征列表中没有该特征，但是在预期的嵌入维度范围内，仍然添加
+                    numeric_df[column_name] = val
     
     # 合并所有特征
     all_features = pd.concat([numeric_df.reset_index(drop=True), 
@@ -95,6 +98,14 @@ def process_features(data):
     return final_features
 
 class handler(BaseHTTPRequestHandler):
+    def do_OPTIONS(self):
+        """处理OPTIONS请求（用于CORS预检）"""
+        self.send_response(204)
+        self.send_header('Access-Control-Allow-Origin', '*')  # 在生产环境中应限制为您的前端域名
+        self.send_header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+        self.send_header('Access-Control-Allow-Headers', 'Content-Type')
+        self.end_headers()
+        
     def do_POST(self):
         """处理POST请求"""
         # 获取请求内容长度
@@ -105,12 +116,32 @@ class handler(BaseHTTPRequestHandler):
         try:
             data = json.loads(post_data.decode('utf-8'))
         except json.JSONDecodeError:
-            self.send_error(400, "无效的JSON数据")
+            self.send_response(400)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': '无效的JSON数据'}).encode())
             return
         
+        # 检查是否提供了嵌入向量
+        if 'embeddings' not in data:
+            self.send_response(400)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            response = {
+                'error': '请提供嵌入向量。直接文本处理在此部署中不支持。'
+            }
+            self.wfile.write(json.dumps(response).encode())
+            return
+            
         # 验证模型是否已加载
         if model is None:
-            self.send_error(500, "模型未加载成功")
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': '模型未加载成功'}).encode())
             return
         
         try:
@@ -124,6 +155,7 @@ class handler(BaseHTTPRequestHandler):
             # 返回结果
             self.send_response(200)
             self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
             
             response = {
@@ -135,4 +167,8 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(response).encode())
             
         except Exception as e:
-            self.send_error(500, f"预测错误: {str(e)}")
+            self.send_response(500)
+            self.send_header('Content-type', 'application/json')
+            self.send_header('Access-Control-Allow-Origin', '*')
+            self.end_headers()
+            self.wfile.write(json.dumps({'error': f'预测错误: {str(e)}'}).encode())
