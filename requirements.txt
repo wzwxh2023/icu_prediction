@@ -5,3 +5,14 @@ lightgbm==3.3.5
 joblib==1.2.0
 flask==2.3.2
 gunicorn==21.2.0
+# 文本处理和嵌入相关
+sentence-transformers==2.2.2
+transformers==4.28.1
+torch==2.0.1
+# 如果在无GPU环境下使用，可以使用CPU版本
+# 可选的NLP工具
+nltk==3.8.1
+# PCA和降维
+matplotlib==3.7.1
+# 其他工具
+tqdm==4.65.0
