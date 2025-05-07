@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 # 模型路径
-MODEL_DIR = os.path.join(os.path.dirname(__file__), '../model_files')
+MODEL_DIR = os.path.join(os.path.dirname(__file__), '../model')
 MODEL_PATH = os.path.join(MODEL_DIR, 'lightgbm_icu_model.pkl')
 SCALER_PATH = os.path.join(MODEL_DIR, 'scaler.pkl')
 FEATURE_LIST_PATH = os.path.join(MODEL_DIR, 'feature_list.txt')
