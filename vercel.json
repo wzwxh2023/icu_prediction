@@ -19,11 +19,5 @@
   "env": {
     "PYTHONPATH": "."
   },
-  "functions": {
-    "api/predict.py": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
   "public": false
 }
