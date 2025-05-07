@@ -3,7 +3,7 @@ import json
 import os
 import joblib
 import numpy as np
-import pandas as pd
+from datetime import datetime
 
 # 模型路径
 MODEL_DIR = os.path.join(os.path.dirname(__file__), '../model')
@@ -28,6 +28,9 @@ except Exception as e:
 
 def process_features(data):
     """从请求数据提取和处理特征"""
+    # 创建特征字典
+    feature_dict = {}
+    
     # 提取生理指标
     raw_physiological = ['age', 'bmi', 'pulse', 'tempreture', 'sbp', 'res']
     mews_total = ['mews_total']
@@ -49,26 +52,22 @@ def process_features(data):
     
     # 应用标准化
     if scaler:
-        numeric_df = pd.DataFrame([numeric_data])
-        numeric_scaled = scaler.transform(numeric_df)
-        numeric_df = pd.DataFrame(numeric_scaled, columns=numeric_features)
+        numeric_values = [numeric_data.get(f, 0) for f in numeric_features]
+        numeric_scaled = scaler.transform([numeric_values])[0]
+        for i, feature in enumerate(numeric_features):
+            feature_dict[feature] = numeric_scaled[i]
     else:
-        numeric_df = pd.DataFrame([numeric_data])
+        for feature in numeric_features:
+            feature_dict[feature] = numeric_data.get(feature, 0)
     
-    # 处理分类特征
-    categorical_data = {}
+    # 处理分类特征 - 简化的独热编码
     for feature in categorical_features:
-        categorical_data[feature] = data.get(feature, '')
-        
-    categorical_df = pd.DataFrame([categorical_data])
-    categorical_df = pd.get_dummies(categorical_df, drop_first=True)
-    
-    # 确保所有需要的分类特征列都存在
-    for feature in feature_list:
-        if feature not in numeric_df.columns and feature not in categorical_df.columns:
-            if not feature.startswith('diagnosis_emb_') and not feature.startswith('history_emb_') and \
-               not feature.startswith('exam_critical_value_emb_') and not feature.startswith('lab_critical_value_emb_'):
-                categorical_df[feature] = 0
+        value = data.get(feature, '')
+        # 为分类特征创建所有可能的列
+        for possible_value in ['1', 'yes', 'true', '0', 'no', 'false']:
+            col_name = f"{feature}_{possible_value}"
+            if col_name in feature_list:
+                feature_dict[col_name] = 1 if value == possible_value else 0
     
     # 处理文本嵌入特征
     if 'embeddings' in data:
@@ -76,26 +75,15 @@ def process_features(data):
         for emb_name, emb_values in embeddings.items():
             for i, val in enumerate(emb_values):
                 column_name = f"{emb_name}_emb_{i}"
-                if column_name in feature_list:
-                    numeric_df[column_name] = val
-                elif i < 768:  # 假设嵌入向量维度为768，适用于BAAI/bge-large模型
-                    # 如果特征列表中没有该特征，但是在预期的嵌入维度范围内，仍然添加
-                    numeric_df[column_name] = val
+                if column_name in feature_list or i < 768:
+                    feature_dict[column_name] = val
     
-    # 合并所有特征
-    all_features = pd.concat([numeric_df.reset_index(drop=True), 
-                             categorical_df.reset_index(drop=True)], 
-                             axis=1)
+    # 创建最终特征数组
+    final_features = []
+    for feature in feature_list:
+        final_features.append(feature_dict.get(feature, 0))
     
-    # 确保特征顺序与训练时一致
-    final_features = pd.DataFrame(columns=feature_list)
-    for col in feature_list:
-        if col in all_features.columns:
-            final_features[col] = all_features[col]
-        else:
-            final_features[col] = 0
-    
-    return final_features
+    return np.array([final_features])
 
 class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self):
@@ -161,7 +149,7 @@ class handler(BaseHTTPRequestHandler):
             response = {
                 'icu_probability': float(prediction_proba),
                 'icu_needed': bool(prediction == 1),
-                'prediction_timestamp': pd.Timestamp.now().isoformat()
+                'prediction_timestamp': datetime.now().isoformat()
             }
             
             self.wfile.write(json.dumps(response).encode())
